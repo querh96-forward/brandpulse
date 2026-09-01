@@ -1,0 +1,130 @@
+services:
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /api/v1
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O /dev/null http://127.0.0.1/ || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s        
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+    environment:
+      APP_ENV: development
+      APP_DEBUG: "true"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-brandpulse}:${POSTGRES_PASSWORD:-brandpulse_dev}@postgres:5432/${POSTGRES_DB:-brandpulse}
+      REDIS_URL: redis://redis:6379/0
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-120}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-1}
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s      
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully        
+    volumes:
+      - ./app:/app/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  migrate:
+    build:
+      context: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-brandpulse}:${POSTGRES_PASSWORD:-brandpulse_dev}@postgres:5432/${POSTGRES_DB:-brandpulse}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: alembic upgrade head
+
+  worker:
+    build:
+      context: .
+    environment:
+      APP_ENV: development
+      APP_DEBUG: "true"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-brandpulse}:${POSTGRES_PASSWORD:-brandpulse_dev}@postgres:5432/${POSTGRES_DB:-brandpulse}
+      REDIS_URL: redis://redis:6379/0
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-120}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-1}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully        
+    volumes:
+      - ./app:/app/app
+    command: python -m app.workers.analysis
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-brandpulse}
+      POSTGRES_USER: ${POSTGRES_USER:-brandpulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brandpulse_dev}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-brandpulse} -d ${POSTGRES_DB:-brandpulse}
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
+  redis_data:
