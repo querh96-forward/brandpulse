@@ -1,8 +1,9 @@
-import { type ChangeEvent, useEffect, useState } from 'react'
+import { type ChangeEvent, useCallback, useEffect, useState } from 'react'
 
 import './App.css'
 
 import { ArticleForm } from './components/ArticleForm'
+import { FeedSources } from './components/FeedSources'
 
 import { RecentArticles } from './components/RecentArticles'
 
@@ -167,11 +168,11 @@ function App() {
     void loadDashboard()
   }, [selectedBrandId, dashboardVersion])
 
-  function refreshDashboard() {
+  const refreshDashboard = useCallback(() => {
     setIsLoading(true)
     setError(null)
     setDashboardVersion((currentVersion) => currentVersion + 1)
-  }
+  }, [])
 
   function handleBrandChange(event: ChangeEvent<HTMLSelectElement>) {
     setSelectedBrandId(event.target.value)
@@ -273,6 +274,14 @@ function App() {
           ))}
         </section>
 
+        {selectedBrandId && (
+          <FeedSources
+            key={`feeds-${selectedBrandId}`}
+            brandId={selectedBrandId}
+            onDataChanged={refreshDashboard}
+          />
+        )}
+
         <ArticleForm
           key={selectedBrandId}
           brandId={selectedBrandId}
@@ -281,7 +290,7 @@ function App() {
 
         {selectedBrandId && (
           <RecentArticles
-            key={`${selectedBrandId}-${dashboardVersion}`}
+            key={selectedBrandId}
             brandId={selectedBrandId}
             refreshVersion={dashboardVersion}
             onDataChanged={refreshDashboard}

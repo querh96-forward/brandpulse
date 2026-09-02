@@ -7,7 +7,9 @@ BrandPulse 是一个 AI 品牌舆情采集、风险分析与可视化平台。�
 ## 已实现能力
 
 - 品牌创建、列表和详情查询
-- 手工录入及 RSS Feed 批量导入
+- 手工录入、RSS Feed 批量导入及持久化数据源管理
+- 独立 Collector 定时采集，支持立即采集、启停、采集周期、单次文章上限和错误记录
+- RSS 新文章自动创建持久化分析任务并进入 Redis 队列
 - 基于 SHA-256 内容指纹的文章去重
 - OpenAI-compatible 模型 Provider，可切换兼容模型服务
 - Pydantic 结构化输出：情感、风险等级、风险类型、摘要与处置建议
@@ -15,7 +17,7 @@ BrandPulse 是一个 AI 品牌舆情采集、风险分析与可视化平台。�
 - PostgreSQL 持久化任务状态与分析结果
 - 应用层复用与 PostgreSQL 部分唯一索引，防止同一文章重复创建活动任务
 - 品牌风险概览、高风险文章列表和近 30 天风险趋势
-- React + TypeScript 管理台：文章录入、异步进度轮询、历史文章补分析和结果展开
+- React + TypeScript 管理台：文章录入、自适应异步进度轮询、历史文章补分析和结果展开
 - Docker Compose 一键运行前端、API、worker、迁移、PostgreSQL 和 Redis
 - 可关联 worker 日志，记录 `job_id`、`article_id`、尝试次数和模型名称
 
@@ -27,6 +29,9 @@ flowchart LR
     Nginx -->|/api 反向代理| API[FastAPI]
     API --> PostgreSQL[(PostgreSQL)]
     API --> Redis[(Redis pending queue)]
+    Collector[RSS Collector] --> RSS[Public RSS Feeds]
+    Collector --> PostgreSQL
+    Collector --> Redis
     Redis --> Worker[Analysis Worker]
     Worker --> Processing[(Redis processing queue)]
     Worker --> LLM[OpenAI-compatible LLM API]
@@ -47,6 +52,23 @@ POST /articles/{id}/analyze/async
 ```
 
 worker 异常退出时，processing 队列中的任务会在下次启动时恢复到 pending 队列。该机制提供 at-least-once 处理语义；分析结果按文章更新，避免产生多份结果记录。
+
+自动采集流程：
+
+```text
+feed_sources 保存 RSS 地址、启停状态和采集周期
+  → Collector 每轮查询到期的数据源
+  → 获取并解析公开 RSS XML
+  → 只处理按时间排序的前 N 篇（默认 5 篇，范围 1–50）
+  → SHA-256 内容指纹去重并保存新文章
+  → PostgreSQL 创建 queued 分析任务
+  → 队列协调器补发尚未进入 Redis 的持久化任务
+  → Analysis Worker 完成模型分析
+```
+
+数据库中的 `analysis_jobs` 同时承担持久化任务记录的作用。Collector 会检查仍为 `queued`、但不在 Redis pending/processing 队列中的任务并重新分发，从而覆盖数据库提交后 Redis 短暂不可用的情况。
+
+每个 RSS 数据源通过 `max_articles_per_collection` 限制单轮处理规模，默认值为 5。即使上游 Feed 一次返回 99 篇，Collector 也只会让前 5 篇进入去重、入库和分析队列；采集响应会分别返回发现数、实际处理数和因上限忽略数。前端在存在活动任务时每 5 秒刷新，空闲时每 30 秒巡检，发现新结果后同步更新风险概览和图表。
 
 ## 技术栈
 
@@ -72,7 +94,7 @@ docker compose ps -a
 
 正常状态：
 
-- `frontend`、`api`、`worker`、`postgres`、`redis` 为 `Up`
+- `frontend`、`api`、`worker`、`collector`、`postgres`、`redis` 为 `Up`
 - `migrate` 为 `Exited (0)`，表示迁移已成功执行
 
 访问地址：
@@ -84,7 +106,7 @@ docker compose ps -a
 查看运行日志：
 
 ```bash
-docker compose logs -f api worker
+docker compose logs -f api worker collector
 ```
 
 停止服务并保留数据卷：
@@ -105,16 +127,20 @@ LLM_BASE_URL=https://provider.example.com/v1
 LLM_MODEL=provider/model-name
 LLM_TIMEOUT_SECONDS=120
 LLM_MAX_RETRIES=1
+RSS_REQUEST_TIMEOUT_SECONDS=30
+COLLECTOR_POLL_SECONDS=10
 ```
 
 - `LLM_TIMEOUT_SECONDS`：单次模型 HTTP 请求的最大等待时间
 - `LLM_MAX_RETRIES`：SDK 在一次 worker 任务尝试中的额外重试次数
 - worker 在任务层最多尝试 3 次，最终状态和错误信息写入 PostgreSQL
+- `RSS_REQUEST_TIMEOUT_SECONDS`：单次 RSS HTTP 请求超时
+- `COLLECTOR_POLL_SECONDS`：Collector 检查到期数据源的频率；每个数据源自身的采集周期由数据库配置
 
 修改 `.env` 后需要重新创建容器，单纯执行 `restart` 不会重新读取环境变量：
 
 ```bash
-docker compose up -d --no-deps --force-recreate api worker
+docker compose up -d --no-deps --force-recreate api worker collector
 ```
 
 不同兼容服务对结构化输出的支持可能不同，切换服务后应完成一次端到端验证。不要提交包含真实密钥的 `.env`。
@@ -127,10 +153,15 @@ docker compose up -d --no-deps --force-recreate api worker
 | `GET` | `/api/v1/brands` | 查询品牌列表 |
 | `POST` | `/api/v1/articles` | 手工创建文章 |
 | `POST` | `/api/v1/articles/import/rss` | 从 RSS 导入文章 |
+| `POST` | `/api/v1/feed-sources` | 保存 RSS 数据源 |
+| `GET` | `/api/v1/feed-sources?brand_id=...` | 查询品牌 RSS 数据源 |
+| `PATCH` | `/api/v1/feed-sources/{id}` | 修改启停状态、名称、地址、采集周期或单次文章上限 |
+| `POST` | `/api/v1/feed-sources/{id}/collect` | 立即采集并自动提交新文章分析 |
 | `GET` | `/api/v1/articles?brand_id=...` | 查询品牌文章 |
 | `POST` | `/api/v1/articles/{id}/analyze/async` | 创建或复用异步分析任务 |
 | `GET` | `/api/v1/analysis-jobs/{job_id}` | 查询任务状态 |
 | `GET` | `/api/v1/articles/{id}/analysis` | 查询分析结果 |
+| `GET` | `/api/v1/articles/{id}/analysis/status` | 查询未提交、排队、处理中、完成或失败状态 |
 | `GET` | `/api/v1/brands/{id}/risk-summary` | 品牌风险概览 |
 | `GET` | `/api/v1/brands/{id}/high-risk-articles` | 高风险文章 |
 | `GET` | `/api/v1/brands/{id}/risk-trend` | 风险趋势 |
@@ -153,7 +184,7 @@ uv run ruff format --check .
 uv run pytest -q
 ```
 
-当前后端测试集包含 39 个测试，覆盖 API、Schema、RSS 解析、内容去重、报表查询、队列操作、worker 重试、持久化和数据库约束。
+当前后端测试集包含 42 个测试，覆盖 API、Schema、RSS 解析、数据源持久化、自动入队、内容去重、报表查询、队列操作、worker 重试、持久化和数据库约束。
 
 运行前端检查：
 
@@ -187,6 +218,7 @@ brandpulse/
 
 - 数据库迁移：Alembic 只执行尚未应用的版本
 - 内容幂等：文章正文 SHA-256 唯一约束
+- 流量保护：每个 RSS 数据源限制单轮处理和自动入队的文章数量
 - 任务幂等：接口复用活动任务，数据库部分唯一索引处理并发竞态
 - 队列可靠性：pending/processing 双队列和 worker 启动恢复
 - 分层重试：SDK 请求级重试与 worker 任务级重试
@@ -197,7 +229,7 @@ brandpulse/
 
 - 接入 RAGFlow 品牌知识库，为处置建议补充企业资料与引用依据
 - 使用 OpenClaw/Agent 自动生成日报并推送高风险预警
-- 增加定时采集、网页数据源与 CSV 导入
+- 增加网页数据源与 CSV 导入
 - 增加鉴权、角色权限和生产环境部署配置
 - 增加前端组件测试、端到端测试和性能基准
 

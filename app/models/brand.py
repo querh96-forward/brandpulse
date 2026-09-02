@@ -10,6 +10,7 @@ from app.db.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.article import Article
+    from app.models.feed_source import FeedSource
 
 
 class Brand(TimestampMixin, Base):
@@ -20,3 +21,7 @@ class Brand(TimestampMixin, Base):
     description: Mapped[str | None] = mapped_column(Text)
 
     articles: Mapped[list[Article]] = relationship(back_populates="brand")
+    feed_sources: Mapped[list[FeedSource]] = relationship(
+        back_populates="brand",
+        cascade="all, delete-orphan",
+    )

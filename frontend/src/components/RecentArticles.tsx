@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { API_BASE_URL } from '../config'
 
@@ -43,12 +43,17 @@ type AnalysisResult = {
 
 type AnalysisStatus = {
   article_id: string
-  status: 'pending' | 'completed'
+  status: 'not_submitted' | AnalysisJobStatus
+  job_id: string | null
+  attempts: number
+  last_error: string | null
   result: AnalysisResult | null
 }
 
 type ArticleWithStatus = Article & {
   analysisStatus: AnalysisStatus['status']
+  analysisAttempts: number
+  analysisError: string | null
   analysisResult: AnalysisResult | null
 }
 
@@ -66,6 +71,16 @@ const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
 
 const POLL_INTERVAL_MS = 2000
 const MAX_POLLS = 180
+const ACTIVE_REFRESH_INTERVAL_MS = 5000
+const IDLE_REFRESH_INTERVAL_MS = 30000
+
+const ANALYSIS_STATUS_LABELS: Record<AnalysisStatus['status'], string> = {
+  not_submitted: '未提交',
+  queued: '排队中',
+  processing: '分析中',
+  completed: '已分析',
+  failed: '分析失败',
+}
 
 function wait(milliseconds: number) {
   return new Promise<void>((resolve) => {
@@ -88,6 +103,10 @@ export function RecentArticles({
   const [expandedArticleId, setExpandedArticleId] = useState<
     string | null
   >(null)
+  const [isAutoRefreshing, setIsAutoRefreshing] = useState(false)
+  const previousStatusesRef = useRef<Map<string, AnalysisStatus['status']> | null>(
+    null,
+  )
 
   useEffect(() => {
     if (!brandId) {
@@ -95,8 +114,11 @@ export function RecentArticles({
     }
 
     let isCancelled = false
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined
 
     async function loadArticles() {
+      let nextRefreshInterval = IDLE_REFRESH_INTERVAL_MS
+
       try {
         const response = await fetch(
           `${API_BASE_URL}/articles?brand_id=${brandId}&offset=0&limit=10`,
@@ -128,13 +150,43 @@ export function RecentArticles({
             return {
               ...article,
               analysisStatus: statusData.status,
+              analysisAttempts: statusData.attempts,
+              analysisError: statusData.last_error,
               analysisResult: statusData.result,
             }
           }),
         )
 
         if (!isCancelled) {
+          const hasActiveJobs = articlesWithStatus.some(
+            (article) =>
+              article.analysisStatus === 'queued' ||
+              article.analysisStatus === 'processing',
+          )
+          const currentStatuses = new Map(
+            articlesWithStatus.map((article) => [
+              article.id,
+              article.analysisStatus,
+            ]),
+          )
+          const previousStatuses = previousStatusesRef.current
+          const hasNewCompletedAnalysis = articlesWithStatus.some(
+            (article) =>
+              article.analysisStatus === 'completed' &&
+              previousStatuses?.get(article.id) !== 'completed',
+          )
+
           setArticles(articlesWithStatus)
+          setError(null)
+          setIsAutoRefreshing(hasActiveJobs)
+          previousStatusesRef.current = currentStatuses
+          nextRefreshInterval = hasActiveJobs
+            ? ACTIVE_REFRESH_INTERVAL_MS
+            : IDLE_REFRESH_INTERVAL_MS
+
+          if (previousStatuses !== null && hasNewCompletedAnalysis) {
+            onDataChanged()
+          }
         }
       } catch (caughtError: unknown) {
         if (!isCancelled) {
@@ -148,6 +200,10 @@ export function RecentArticles({
       } finally {
         if (!isCancelled) {
           setIsLoading(false)
+          refreshTimer = setTimeout(
+            () => void loadArticles(),
+            nextRefreshInterval,
+          )
         }
       }
     }
@@ -156,8 +212,11 @@ export function RecentArticles({
 
     return () => {
       isCancelled = true
+      if (refreshTimer !== undefined) {
+        clearTimeout(refreshTimer)
+      }
     }
-  }, [brandId, refreshVersion])
+  }, [brandId, refreshVersion, onDataChanged])
 
   async function pollAnalysisJob(jobId: string) {
     for (let pollCount = 0; pollCount < MAX_POLLS; pollCount += 1) {
@@ -207,6 +266,14 @@ export function RecentArticles({
 
       const job = (await response.json()) as CreatedAnalysisJob
 
+      setArticles((currentArticles) =>
+        currentArticles.map((article) =>
+          article.id === articleId
+            ? { ...article, analysisStatus: 'queued' }
+            : article,
+        ),
+      )
+
       await pollAnalysisJob(job.job_id)
 
       setArticles((currentArticles) =>
@@ -244,7 +311,10 @@ export function RecentArticles({
           <p className="eyebrow">RECENT ARTICLES</p>
           <h2>最近采集文章</h2>
         </div>
-        <span>{articles.length} 篇</span>
+        <span>
+          {articles.length} 篇 ·{' '}
+          {isAutoRefreshing ? '5 秒刷新' : '30 秒巡检'}
+        </span>
       </div>
 
       {analysisError && (
@@ -273,18 +343,23 @@ export function RecentArticles({
                       {article.source_name} ·{' '}
                       {new Date(article.created_at).toLocaleString('zh-CN')}
                     </p>
+                    {article.analysisStatus === 'failed' && (
+                      <p className="recent-analysis-failure">
+                        第 {article.analysisAttempts} 次尝试失败：
+                        {article.analysisError ?? '未记录错误详情'}
+                      </p>
+                    )}
                   </div>
 
                   <div className="recent-article-actions">
                     <span
                       className={`article-analysis-status article-analysis-status--${article.analysisStatus}`}
                     >
-                      {article.analysisStatus === 'completed'
-                        ? '已分析'
-                        : '尚无结果'}
+                      {ANALYSIS_STATUS_LABELS[article.analysisStatus]}
                     </span>
 
-                    {article.analysisStatus === 'pending' ? (
+                    {article.analysisStatus === 'not_submitted' ||
+                    article.analysisStatus === 'failed' ? (
                       <button
                         type="button"
                         className="recent-analyze-button"
@@ -293,7 +368,9 @@ export function RecentArticles({
                       >
                         {analyzingArticleId === article.id
                           ? '分析中……'
-                          : '提交分析'}
+                          : article.analysisStatus === 'failed'
+                            ? '重新分析'
+                            : '提交分析'}
                       </button>
                     ) : article.analysisResult ? (
                       <button

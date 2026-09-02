@@ -59,6 +59,8 @@ async def test_import_rss_articles(
     assert first_response.status_code == 200
     assert first_response.json() == {
         "discovered_count": 1,
+        "considered_count": 1,
+        "truncated_count": 0,
         "imported_count": 1,
         "skipped_count": 0,
     }
@@ -66,6 +68,8 @@ async def test_import_rss_articles(
     assert second_response.status_code == 200
     assert second_response.json() == {
         "discovered_count": 1,
+        "considered_count": 1,
+        "truncated_count": 0,
         "imported_count": 0,
         "skipped_count": 1,
     }

@@ -1,4 +1,9 @@
+import uuid
+
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.analysis_job import AnalysisJob, AnalysisJobStatus
 
 
 async def test_analyze_article_endpoint(client: AsyncClient) -> None:
@@ -75,7 +80,10 @@ async def test_get_article_analysis(client: AsyncClient) -> None:
     assert result_response.json()["article_id"] == article_id
 
 
-async def test_get_article_analysis_status(client: AsyncClient) -> None:
+async def test_get_article_analysis_status(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
     article_response = await client.post(
         "/api/v1/articles",
         json={
@@ -96,7 +104,33 @@ async def test_get_article_analysis_status(client: AsyncClient) -> None:
     assert pending_response.status_code == 200
     assert pending_response.json() == {
         "article_id": article_id,
-        "status": "pending",
+        "status": "not_submitted",
+        "job_id": None,
+        "attempts": 0,
+        "last_error": None,
+        "result": None,
+    }
+
+    job = AnalysisJob(
+        article_id=uuid.UUID(article_id),
+        status=AnalysisJobStatus.PROCESSING,
+        attempts=1,
+    )
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+
+    processing_response = await client.get(
+        f"/api/v1/articles/{article_id}/analysis/status",
+    )
+
+    assert processing_response.status_code == 200
+    assert processing_response.json() == {
+        "article_id": article_id,
+        "status": "processing",
+        "job_id": str(job.id),
+        "attempts": 1,
+        "last_error": None,
         "result": None,
     }
 

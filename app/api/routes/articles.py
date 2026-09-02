@@ -100,14 +100,17 @@ async def import_rss_articles(
         source_name=payload.source_name,
         brand_id=payload.brand_id,
     )
+    considered_articles = articles[: payload.max_articles]
 
     imported_count, skipped_count = await save_collected_articles(
         session=session,
-        articles=articles,
+        articles=considered_articles,
     )
 
     return RssImportRead(
         discovered_count=len(articles),
+        considered_count=len(considered_articles),
+        truncated_count=max(0, len(articles) - len(considered_articles)),
         imported_count=imported_count,
         skipped_count=skipped_count,
     )
@@ -263,18 +266,33 @@ async def get_article_analysis_status(
             AnalysisResult.article_id == article_id,
         )
     )
+    latest_job = await session.scalar(
+        select(AnalysisJob)
+        .where(AnalysisJob.article_id == article_id)
+        .order_by(AnalysisJob.created_at.desc())
+        .limit(1)
+    )
 
-    if analysis is None:
+    if analysis is not None:
         return AnalysisStatusRead(
             article_id=article_id,
-            status="pending",
+            status="completed",
+            job_id=latest_job.id if latest_job is not None else None,
+            attempts=latest_job.attempts if latest_job is not None else 0,
+            last_error=latest_job.last_error if latest_job is not None else None,
+            result=AnalysisRead.model_validate(analysis),
         )
 
-    return AnalysisStatusRead(
-        article_id=article_id,
-        status="completed",
-        result=AnalysisRead.model_validate(analysis),
-    )
+    if latest_job is not None:
+        return AnalysisStatusRead(
+            article_id=article_id,
+            status=latest_job.status,
+            job_id=latest_job.id,
+            attempts=latest_job.attempts,
+            last_error=latest_job.last_error,
+        )
+
+    return AnalysisStatusRead(article_id=article_id, status="not_submitted")
 
 
 @router.get("", response_model=list[ArticleRead])

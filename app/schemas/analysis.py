@@ -39,7 +39,16 @@ class AnalysisJobRead(BaseModel):
 
 class AnalysisStatusRead(BaseModel):
     article_id: uuid.UUID
-    status: Literal["pending", "completed"]
+    status: Literal[
+        "not_submitted",
+        "queued",
+        "processing",
+        "completed",
+        "failed",
+    ]
+    job_id: uuid.UUID | None = None
+    attempts: int = 0
+    last_error: str | None = None
     result: AnalysisRead | None = None
 
 

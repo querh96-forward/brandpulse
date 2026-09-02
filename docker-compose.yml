@@ -30,6 +30,7 @@ services:
       APP_DEBUG: "true"
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-brandpulse}:${POSTGRES_PASSWORD:-brandpulse_dev}@postgres:5432/${POSTGRES_DB:-brandpulse}
       REDIS_URL: redis://redis:6379/0
+      RSS_REQUEST_TIMEOUT_SECONDS: ${RSS_REQUEST_TIMEOUT_SECONDS:-30}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
@@ -93,6 +94,28 @@ services:
     volumes:
       - ./app:/app/app
     command: python -m app.workers.analysis
+    restart: unless-stopped
+
+  collector:
+    build:
+      context: .
+    environment:
+      APP_ENV: development
+      APP_DEBUG: "true"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-brandpulse}:${POSTGRES_PASSWORD:-brandpulse_dev}@postgres:5432/${POSTGRES_DB:-brandpulse}
+      REDIS_URL: redis://redis:6379/0
+      RSS_REQUEST_TIMEOUT_SECONDS: ${RSS_REQUEST_TIMEOUT_SECONDS:-30}
+      COLLECTOR_POLL_SECONDS: ${COLLECTOR_POLL_SECONDS:-10}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - ./app:/app/app
+    command: python -m app.workers.collector
     restart: unless-stopped
 
   postgres:

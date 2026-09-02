@@ -48,3 +48,4 @@ async def test_save_collected_articles_skips_duplicates(
 
     assert len(saved_articles) == 1
     assert saved_articles[0].title == "第一篇采集文章"
+    assert saved_articles[0].feed_source_id is None

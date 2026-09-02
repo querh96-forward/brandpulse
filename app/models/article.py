@@ -12,6 +12,7 @@ from app.db.base import Base, TimestampMixin
 if TYPE_CHECKING:
     from app.models.analysis import AnalysisResult
     from app.models.brand import Brand
+    from app.models.feed_source import FeedSource
 
 
 class Article(TimestampMixin, Base):
@@ -23,6 +24,11 @@ class Article(TimestampMixin, Base):
         ForeignKey("brands.id", ondelete="SET NULL"),
         index=True,
     )
+    feed_source_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("feed_sources.id", ondelete="SET NULL"),
+        index=True,
+        default=None,
+    )
     source_type: Mapped[str] = mapped_column(String(50), index=True)
     source_name: Mapped[str] = mapped_column(String(100))
     title: Mapped[str] = mapped_column(String(500))
@@ -32,6 +38,7 @@ class Article(TimestampMixin, Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     brand: Mapped[Brand | None] = relationship(back_populates="articles")
+    feed_source: Mapped[FeedSource | None] = relationship(back_populates="articles")
     analysis: Mapped[AnalysisResult | None] = relationship(
         back_populates="article",
         cascade="all, delete-orphan",

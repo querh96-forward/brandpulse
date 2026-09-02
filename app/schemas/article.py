@@ -17,6 +17,7 @@ class ArticleCreate(BaseModel):
 class ArticleRead(BaseModel):
     id: uuid.UUID
     brand_id: uuid.UUID | None
+    feed_source_id: uuid.UUID | None
     source_type: str
     source_name: str
     title: str
@@ -34,9 +35,12 @@ class RssImportRequest(BaseModel):
     brand_id: uuid.UUID
     feed_url: HttpUrl
     source_name: str = Field(min_length=1, max_length=100)
+    max_articles: int = Field(default=5, ge=1, le=50)
 
 
 class RssImportRead(BaseModel):
     discovered_count: int
+    considered_count: int
+    truncated_count: int
     imported_count: int
     skipped_count: int

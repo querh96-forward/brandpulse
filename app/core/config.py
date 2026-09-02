@@ -19,6 +19,8 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://brandpulse:brandpulse_dev@localhost:5432/brandpulse_test"
     )
     redis_url: str = "redis://localhost:6379/0"
+    rss_request_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
+    collector_poll_seconds: float = Field(default=10.0, ge=1, le=300)
 
     llm_api_key: str = ""
     llm_base_url: str = ""
