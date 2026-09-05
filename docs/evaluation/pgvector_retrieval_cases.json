@@ -1,0 +1,62 @@
+[
+  {
+    "id": "Q1",
+    "query": "BC-D200 的额定工作深度和推荐连续工作时长分别是多少？",
+    "answerable": true,
+    "expected_sections": ["1. 品牌与产品信息"]
+  },
+  {
+    "id": "Q2",
+    "query": "设备报出 SEAL-07 后，用户首先应该怎么做？",
+    "answerable": true,
+    "expected_sections": ["SEAL-07 用户首次操作", "1. 品牌与产品信息"]
+  },
+  {
+    "id": "Q3",
+    "query": "2026年A批次使用什么颜色的压力补偿阀？",
+    "answerable": true,
+    "expected_sections": ["1. 品牌与产品信息"]
+  },
+  {
+    "id": "Q4",
+    "query": "某款水下机器人一天内接连发生三起独立漏水投诉，属于什么等级？最晚多久发布首次说明？",
+    "answerable": true,
+    "expected_sections": ["P0 判定与首次响应"]
+  },
+  {
+    "id": "Q5",
+    "query": "单个客户只反馈轻微性能下降，也没有安全问题，应该怎样分级？",
+    "answerable": true,
+    "expected_sections": ["2. 风险分级规则"]
+  },
+  {
+    "id": "Q6",
+    "query": "设备送到企业后，需要几天给出第一份检测结论？",
+    "answerable": true,
+    "expected_sections": ["4. 用户处置政策"]
+  },
+  {
+    "id": "Q7",
+    "query": "专项服务识别码是什么？",
+    "answerable": true,
+    "expected_sections": ["4. 用户处置政策", "SEAL-07 用户首次操作"]
+  },
+  {
+    "id": "Q8",
+    "query": "首次公开说明至少需要包括哪些内容？",
+    "answerable": true,
+    "expected_sections": ["5. 对外沟通要求", "P0 判定与首次响应"]
+  },
+  {
+    "id": "Q9",
+    "query": "BlueCurrent 手机电池的保修期是多少？",
+    "answerable": false,
+    "expected_sections": []
+  },
+  {
+    "id": "Q10",
+    "query": "BlueCurrent 公司CEO的电话号码是多少？",
+    "answerable": false,
+    "expected_sections": []
+  }
+]

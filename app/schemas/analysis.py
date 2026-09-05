@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.analysis import RiskLevel, Sentiment
 from app.models.analysis_job import AnalysisJobStatus
+from app.schemas.knowledge import KnowledgeCitation
 
 
 class AnalysisOutput(BaseModel):
@@ -23,6 +24,11 @@ class AnalysisRead(AnalysisOutput):
     article_id: uuid.UUID
     model_name: str
     prompt_version: str
+    knowledge_used: bool
+    knowledge_citations: list[KnowledgeCitation]
+    retrieval_model_name: str | None
+    evidence_model_name: str | None
+    evidence_reason: str | None
     created_at: datetime
     updated_at: datetime
 

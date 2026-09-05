@@ -4,7 +4,8 @@ import uuid
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Float, ForeignKey, String, Text
+from sqlalchemy import Boolean, Float, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -44,5 +45,13 @@ class AnalysisResult(TimestampMixin, Base):
     suggestion: Mapped[str | None] = mapped_column(Text)
     model_name: Mapped[str] = mapped_column(String(100))
     prompt_version: Mapped[str] = mapped_column(String(30), default="v1")
+    knowledge_used: Mapped[bool] = mapped_column(Boolean, default=False)
+    knowledge_citations: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB,
+        default=list,
+    )
+    retrieval_model_name: Mapped[str | None] = mapped_column(String(100))
+    evidence_model_name: Mapped[str | None] = mapped_column(String(100))
+    evidence_reason: Mapped[str | None] = mapped_column(Text)
 
     article: Mapped[Article] = relationship(back_populates="analysis")

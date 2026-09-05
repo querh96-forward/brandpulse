@@ -37,3 +37,31 @@ async def test_analyze_article_text_uses_provider() -> None:
     assert result.sentiment.value == "negative"
     assert result.risk_level.value == "high"
     assert result.risk_score == 0.82
+
+
+async def test_analyze_article_text_injects_only_verified_knowledge() -> None:
+    provider = FakeAnalysisProvider()
+
+    await analyze_article_text(
+        provider=provider,
+        title="BC-D200 报出 SEAL-07",
+        content="用户反馈设备出现密封异常。",
+        knowledge_context=["SEAL-07 后必须立即停止下潜并回收设备。"],
+    )
+
+    assert "经过检索和证据审核的品牌内部知识" in provider.received_prompt
+    assert "SEAL-07 后必须立即停止下潜并回收设备" in provider.received_prompt
+    assert '<brand_knowledge rank="1">' in provider.received_prompt
+
+
+async def test_analyze_article_text_forbids_fabrication_without_knowledge() -> None:
+    provider = FakeAnalysisProvider()
+
+    await analyze_article_text(
+        provider=provider,
+        title="普通品牌新闻",
+        content="文章未命中品牌内部知识。",
+    )
+
+    assert "本次没有找到经过审核的品牌内部知识" in provider.received_prompt
+    assert "不得编造品牌产品参数" in provider.received_prompt

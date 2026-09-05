@@ -9,8 +9,12 @@ from app.core.config import get_settings
 from app.db.session import async_session_factory
 from app.models.analysis_job import AnalysisJob, AnalysisJobStatus
 from app.models.article import Article
-from app.providers.base import AnalysisProvider
-from app.providers.dependencies import get_analysis_provider
+from app.providers.base import AnalysisProvider, EmbeddingProvider, EvidenceProvider
+from app.providers.dependencies import (
+    get_analysis_provider,
+    get_optional_embedding_provider,
+    get_optional_evidence_provider,
+)
 from app.services.analysis import analyze_and_save_article
 from app.services.analysis_queue import (
     acknowledge_analysis_job,
@@ -27,6 +31,8 @@ async def process_next_analysis_job(
     redis_client: Redis,
     session: AsyncSession,
     provider: AnalysisProvider,
+    embedding_provider: EmbeddingProvider | None = None,
+    evidence_provider: EvidenceProvider | None = None,
 ) -> bool:
     raw_job_id = await claim_next_analysis_job(redis_client)
 
@@ -106,10 +112,12 @@ async def process_next_analysis_job(
     )
 
     try:
-        await analyze_and_save_article(
+        analysis = await analyze_and_save_article(
             session=session,
             provider=provider,
             article=article,
+            embedding_provider=embedding_provider,
+            evidence_provider=evidence_provider,
         )
     except Exception as exc:
         await session.rollback()
@@ -161,11 +169,14 @@ async def process_next_analysis_job(
         await session.commit()
 
         logger.info(
-            "analysis job completed job_id=%s article_id=%s attempt=%s provider=%s",
+            "analysis job completed job_id=%s article_id=%s attempt=%s provider=%s "
+            "knowledge_used=%s citations=%s",
             job.id,
             job.article_id,
             job.attempts,
             provider.model_name,
+            analysis.knowledge_used,
+            len(analysis.knowledge_citations),
         )
 
     await acknowledge_analysis_job(
@@ -184,6 +195,8 @@ async def run_analysis_worker() -> None:
         decode_responses=True,
     )
     provider = get_analysis_provider()
+    embedding_provider = get_optional_embedding_provider()
+    evidence_provider = get_optional_evidence_provider()
 
     try:
         recovered_count = await recover_processing_jobs(
@@ -208,6 +221,8 @@ async def run_analysis_worker() -> None:
                         redis_client=redis_client,
                         session=session,
                         provider=provider,
+                        embedding_provider=embedding_provider,
+                        evidence_provider=evidence_provider,
                     )
                 except Exception:
                     logger.exception("analysis worker iteration failed; retrying in 5 seconds")

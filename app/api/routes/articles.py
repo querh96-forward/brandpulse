@@ -15,8 +15,12 @@ from app.models.analysis import AnalysisResult
 from app.models.analysis_job import AnalysisJob, AnalysisJobStatus
 from app.models.article import Article
 from app.models.brand import Brand
-from app.providers.base import AnalysisProvider
-from app.providers.dependencies import get_analysis_provider
+from app.providers.base import AnalysisProvider, EmbeddingProvider, EvidenceProvider
+from app.providers.dependencies import (
+    get_analysis_provider,
+    get_optional_embedding_provider,
+    get_optional_evidence_provider,
+)
 from app.schemas.analysis import (
     AnalysisJobRead,
     AnalysisRead,
@@ -121,6 +125,14 @@ async def analyze_article(
     article_id: uuid.UUID,
     session: Annotated[AsyncSession, Depends(get_db_session)],
     provider: Annotated[AnalysisProvider, Depends(get_analysis_provider)],
+    embedding_provider: Annotated[
+        EmbeddingProvider | None,
+        Depends(get_optional_embedding_provider),
+    ],
+    evidence_provider: Annotated[
+        EvidenceProvider | None,
+        Depends(get_optional_evidence_provider),
+    ],
 ) -> AnalysisResult:
     article = await session.get(Article, article_id)
 
@@ -134,6 +146,8 @@ async def analyze_article(
         session=session,
         provider=provider,
         article=article,
+        embedding_provider=embedding_provider,
+        evidence_provider=evidence_provider,
     )
 
 

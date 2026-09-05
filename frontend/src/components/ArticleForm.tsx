@@ -22,7 +22,15 @@ type CreatedAnalysisJob = {
 }
 
 type Sentiment = 'positive' | 'neutral' | 'negative'
-type RiskLevel = 'low' | 'medium' | 'high'
+type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
+
+type KnowledgeCitation = {
+  rank: number
+  chunk_id: string
+  source_name: string
+  section_title: string | null
+  similarity: number
+}
 
 type AnalysisResult = {
   sentiment: Sentiment
@@ -34,6 +42,11 @@ type AnalysisResult = {
   suggestion: string | null
   model_name: string
   prompt_version: string
+  knowledge_used: boolean
+  knowledge_citations: KnowledgeCitation[]
+  retrieval_model_name: string | null
+  evidence_model_name: string | null
+  evidence_reason: string | null
 }
 
 const SENTIMENT_LABELS: Record<Sentiment, string> = {
@@ -46,6 +59,7 @@ const RISK_LEVEL_LABELS: Record<RiskLevel, string> = {
   low: '低风险',
   medium: '中风险',
   high: '高风险',
+  critical: '严重风险',
 }
 
 type AnalysisJob = {
@@ -425,6 +439,50 @@ export function ArticleForm({
                   <p>{analysisResult.suggestion}</p>
                 </div>
               )}
+
+              <div
+                className={`rag-trace ${
+                  analysisResult.knowledge_used
+                    ? 'rag-trace--used'
+                    : 'rag-trace--unused'
+                }`}
+              >
+                <div className="rag-trace-heading">
+                  <p className="detail-label">RAG 知识依据</p>
+                  <strong>
+                    {analysisResult.knowledge_used
+                      ? '已使用品牌内部知识'
+                      : '未使用品牌内部知识'}
+                  </strong>
+                </div>
+
+                {analysisResult.evidence_reason && (
+                  <p>{analysisResult.evidence_reason}</p>
+                )}
+
+                {analysisResult.knowledge_citations.length > 0 && (
+                  <ul className="rag-citation-list">
+                    {analysisResult.knowledge_citations.map((citation) => (
+                      <li key={citation.chunk_id}>
+                        <span>
+                          {citation.source_name} ·{' '}
+                          {citation.section_title ?? '未命名章节'}
+                        </span>
+                        <strong>
+                          相似度 {citation.similarity.toFixed(4)}
+                        </strong>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {analysisResult.knowledge_used && (
+                  <p className="rag-trace-models">
+                    检索：{analysisResult.retrieval_model_name} · 审核：
+                    {analysisResult.evidence_model_name}
+                  </p>
+                )}
+              </div>
 
               <p className="analysis-result-model">
                 模型：{analysisResult.model_name} · Prompt：

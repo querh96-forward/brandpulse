@@ -635,6 +635,11 @@ h1 {
   background: rgba(127, 29, 29, 0.3);
 }
 
+.analysis-result-risk--critical {
+  color: #fecdd3;
+  background: rgba(136, 19, 55, 0.45);
+}
+
 .analysis-result-metrics {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -673,6 +678,77 @@ h1 {
 
 .analysis-result-model {
   margin: 18px 0 0;
+  color: #71839c;
+  font-size: 12px;
+}
+
+.rag-trace {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid #263b55;
+  border-radius: 12px;
+  background: #091625;
+}
+
+.rag-trace--used {
+  border-color: rgba(52, 211, 153, 0.45);
+}
+
+.rag-trace--unused {
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.rag-trace-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rag-trace-heading p {
+  margin: 0;
+}
+
+.rag-trace-heading strong {
+  color: #86efac;
+  font-size: 13px;
+}
+
+.rag-trace--unused .rag-trace-heading strong {
+  color: #94a3b8;
+}
+
+.rag-trace > p {
+  margin: 12px 0 0;
+  color: #a8b7ca;
+  line-height: 1.6;
+}
+
+.rag-citation-list {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rag-citation-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(20, 184, 166, 0.08);
+  color: #c5d0df;
+  font-size: 13px;
+}
+
+.rag-citation-list strong {
+  flex: 0 0 auto;
+  color: #67e8f9;
+}
+
+.rag-trace .rag-trace-models {
   color: #71839c;
   font-size: 12px;
 }

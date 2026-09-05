@@ -73,6 +73,9 @@ async def test_analyze_and_save_article_updates_existing_result(
     assert second_analysis.sentiment == "neutral"
     assert second_analysis.risk_level == "low"
     assert second_analysis.risk_score == 0.2
+    assert second_analysis.knowledge_used is False
+    assert second_analysis.knowledge_citations == []
+    assert second_analysis.evidence_reason == "文章未关联品牌，未执行品牌知识检索。"
 
     result = await db_session.scalars(
         select(AnalysisResult).where(

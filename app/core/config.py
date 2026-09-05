@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     llm_max_retries: int = Field(default=1, ge=0, le=5)
     ragflow_base_url: str = ""
     ragflow_api_key: str = ""
+    embedding_api_key: str = ""
+    embedding_base_url: str = ""
+    embedding_model: str = "text-embedding-v4"
+    embedding_dimensions: int = Field(default=1024, ge=1024, le=1024)
+    embedding_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
 
     model_config = SettingsConfigDict(
         env_file=".env",
