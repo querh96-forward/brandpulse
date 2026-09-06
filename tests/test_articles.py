@@ -124,6 +124,56 @@ async def test_duplicate_article_content_returns_conflict(
     }
 
 
+async def test_html_article_is_cleaned_before_hashing_and_duplicate_detection(
+    client: AsyncClient,
+) -> None:
+    brand_response = await client.post(
+        "/api/v1/brands",
+        json={
+            "name": "HtmlCleaningBrand",
+            "description": "用于测试 HTML 清洗",
+        },
+    )
+    brand_id = brand_response.json()["id"]
+    cleaned_content = "设备 出现 SEAL-07。\n用户必须立即回收。"
+
+    html_response = await client.post(
+        "/api/v1/articles",
+        json={
+            "brand_id": brand_id,
+            "source_type": "html",
+            "source_name": "HTML News",
+            "title": "<strong>BC-D200 密封告警</strong>",
+            "content": (
+                "<p>设备&nbsp;出现 <b>SEAL-07</b>。</p>"
+                "<script>tracking()</script><p>用户必须立即回收。</p>"
+            ),
+        },
+    )
+
+    assert html_response.status_code == 201
+    assert html_response.json()["title"] == "BC-D200 密封告警"
+    assert html_response.json()["content"] == cleaned_content
+    assert (
+        html_response.json()["content_hash"]
+        == hashlib.sha256(cleaned_content.encode("utf-8")).hexdigest()
+    )
+
+    duplicate_response = await client.post(
+        "/api/v1/articles",
+        json={
+            "brand_id": brand_id,
+            "source_type": "manual",
+            "source_name": "Manual Input",
+            "title": "相同正文的纯文本版本",
+            "content": cleaned_content,
+        },
+    )
+
+    assert duplicate_response.status_code == 409
+    assert duplicate_response.json() == {"detail": "article content already exists"}
+
+
 async def test_get_article_not_found(client: AsyncClient) -> None:
     response = await client.get(
         "/api/v1/articles/00000000-0000-0000-0000-000000000000",

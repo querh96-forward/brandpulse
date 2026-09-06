@@ -10,6 +10,7 @@ BrandPulse 是一个 AI 品牌舆情采集、知识增强分析与可视化平�
 - 手工录入、RSS Feed 批量导入及持久化数据源管理
 - 独立 Collector 定时采集，支持立即采集、启停、采集周期、单次文章上限和错误记录
 - RSS 新文章自动创建持久化分析任务并进入 Redis 队列
+- RSS/HTML 基础清洗：优先读取 `content:encoded`，移除标签、脚本、样式并规范空白与 HTML 实体
 - 基于 SHA-256 内容指纹的文章去重
 - OpenAI-compatible 模型 Provider，可切换兼容模型服务
 - Pydantic 结构化输出：情感、风险等级、风险类型、摘要与处置建议
@@ -72,6 +73,7 @@ worker 异常退出时，processing 队列中的任务会在下次启动时恢�
 feed_sources 保存 RSS 地址、启停状态和采集周期
   → Collector 每轮查询到期的数据源
   → 获取并解析公开 RSS XML
+  → 优先读取完整正文并执行 HTML 文本化清洗
   → 只处理按时间排序的前 N 篇（默认 5 篇，范围 1–50）
   → SHA-256 内容指纹去重并保存新文章
   → PostgreSQL 创建 queued 分析任务
@@ -190,7 +192,7 @@ uv run python -m app.cli.ingest_knowledge \
   docs/knowledge/bluecurrent_seal07_emergency_card.md
 ```
 
-同一品牌和文件名再次入库时会替换该来源原有文本块，便于更新知识版本。当前入口针对 UTF-8 Markdown，并按标题章节分块；TXT、HTML 正文清洗尚未接入知识入库链路。
+同一品牌和文件名再次入库时会替换该来源原有文本块，便于更新知识版本。当前知识入库入口针对 UTF-8 Markdown，并按标题章节分块。文章采集链路已经具备 RSS/HTML 基础文本化，但它与品牌知识文档入库是两条独立链路。
 
 执行向量检索：
 
@@ -299,6 +301,7 @@ brandpulse/
 
 - 数据库迁移：Alembic 只执行尚未应用的版本
 - 内容幂等：文章正文 SHA-256 唯一约束
+- 内容规范化：手工 HTML 和 RSS 正文在计算指纹、存储及分析前使用同一套基础清洗规则
 - 流量保护：每个 RSS 数据源限制单轮处理和自动入队的文章数量
 - 任务幂等：接口复用活动任务，数据库部分唯一索引处理并发竞态
 - 队列可靠性：pending/processing 双队列和 worker 启动恢复
@@ -310,7 +313,7 @@ brandpulse/
 
 ## 后续路线图
 
-- 增加 TXT、HTML 和 RSS 正文清洗，再统一进入知识分块与入库管线
+- 增加 TXT/PDF 知识入库，以及网页正文抽取、模板噪声过滤和更完整的清洗评测
 - 对比本地 pgvector 与 RAGFlow 等外部知识库方案
 - 使用 OpenClaw/Agent 自动生成日报并推送高风险预警
 - 增加网页数据源与 CSV 导入、重排序和更大规模 RAG 评测

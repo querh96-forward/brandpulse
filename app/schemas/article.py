@@ -1,7 +1,9 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+
+from app.services.content_cleaning import clean_html_content, clean_html_inline
 
 
 class ArticleCreate(BaseModel):
@@ -12,6 +14,20 @@ class ArticleCreate(BaseModel):
     content: str = Field(min_length=1)
     url: str | None = Field(default=None, max_length=2000)
     published_at: datetime | None = None
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def clean_title(cls, value: object) -> object:
+        if isinstance(value, str):
+            return clean_html_inline(value)
+        return value
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def clean_content(cls, value: object) -> object:
+        if isinstance(value, str):
+            return clean_html_content(value)
+        return value
 
 
 class ArticleRead(BaseModel):

@@ -41,15 +41,16 @@ BrandPulse 将公开舆情采集、可靠异步分析和品牌内部知识检索
 2. 手工录入文章与公开 RSS Feed 导入。
 3. RSS 数据源持久化、立即采集、启停、采集周期和单轮文章上限。
 4. 独立 Collector 定时采集，到期数据源自动拉取、去重并提交分析。
-5. SHA-256 内容指纹去重。
-6. OpenAI-compatible LLM Provider 和 Pydantic 结构化输出。
-7. PostgreSQL 持久化任务、结果与错误信息。
-8. Redis pending/processing 可靠队列、原子领取、确认、失败重试和启动恢复。
-9. 同一文章活动任务复用及数据库并发约束。
-10. 品牌风险概览、高风险文章列表和近 30 天趋势。
-11. React + TypeScript 管理台及自适应任务轮询。
-12. Docker Compose 一键运行前端、API、迁移、worker、collector、PostgreSQL 和 Redis。
-13. 后端测试、静态检查、前端检查和 GitHub Actions CI。
+5. RSS/HTML 基础清洗：完整正文选择、标签及脚本移除、实体解码和空白规范化。
+6. SHA-256 内容指纹去重。
+7. OpenAI-compatible LLM Provider 和 Pydantic 结构化输出。
+8. PostgreSQL 持久化任务、结果与错误信息。
+9. Redis pending/processing 可靠队列、原子领取、确认、失败重试和启动恢复。
+10. 同一文章活动任务复用及数据库并发约束。
+11. 品牌风险概览、高风险文章列表和近 30 天趋势。
+12. React + TypeScript 管理台及自适应任务轮询。
+13. Docker Compose 一键运行前端、API、迁移、worker、collector、PostgreSQL 和 Redis。
+14. 后端测试、静态检查、前端检查和 GitHub Actions CI。
 
 ### P1：已完成的知识增强分析
 
@@ -65,7 +66,7 @@ BrandPulse 将公开舆情采集、可靠异步分析和品牌内部知识检索
 
 ### P2：待实现的增强能力
 
-1. TXT、HTML 和 RSS 正文清洗及统一知识入库管线。
+1. TXT/PDF 知识入库、网页正文抽取、模板噪声过滤和更完整的清洗评测。
 2. 重排序模型、更大规模检索评测和模型成本对比。
 3. OpenClaw/Agent 日报生成与高风险消息推送。
 4. 鉴权、角色权限和多租户隔离。
@@ -80,6 +81,9 @@ BrandPulse 将公开舆情采集、可靠异步分析和品牌内部知识检索
 - 用户可以为品牌保存多个 RSS 数据源。
 - Collector 根据数据源的采集间隔自动执行采集。
 - 每个数据源可以设置单轮最多处理的文章数，避免 Feed 突然产生大量模型任务。
+- RSS 优先使用 `content:encoded` 完整正文，并回退到 `description`。
+- 手工 HTML 与 RSS 正文统一移除标签、脚本、样式，解码实体并规范空白。
+- 清洗后没有有效标题或正文的 RSS 条目必须跳过。
 - 重复正文不能重复写入数据库。
 
 ### 5.2 异步分析
